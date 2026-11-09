@@ -1,0 +1,25 @@
+--- a/target/linux/ramips/files-5.10/drivers/net/ethernet/ralink/mt7530.c
++++ b/target/linux/ramips/files-5.10/drivers/net/ethernet/ralink/mt7530.c
+@@ -xxxx,7 +xxxx,7 @@ static int mt7530_probe(struct device *dev)
+ 	map = mt7530_find_mapping(dev->of_node);
+ 	if (map)
+ 		mt7530_apply_mapping(mt7530, map);
+ 	mt7530_apply_config(swdev);
+ 
++	/* HC5861 / MT7620 内置 gsw 修复：port5(WAN, RTL8211E) 不在 mediatek,portmap
++	 * 的 5 字符覆盖范围内，probe 后默认仍留在 VLAN1，导致开机到 netifd 接管前
++	 * WAN 的 DHCP 通过交换芯片二层泛洪到 LAN 口（FS#612）。这里在 probe 阶段
++	 * （内核 ~1s，早于任何用户态与 PC 发包）就把 port5 从 VLAN1 摘除、单列
++	 * VLAN2，与 LAN 口硬件隔离。netifd 之后按 UCI 重放同样配置。 */
++	if (!bus) {
++		int wan = 5;
++		priv->vlan_entries[1].member &= ~(1 << wan);   /* 移出 VLAN1 */
++		priv->vlan_entries[2].member  = (1 << wan) | (1 << MT7530_CPU_PORT);
++		priv->vlan_entries[2].etags   = (1 << MT7530_CPU_PORT);
++		priv->vlan_entries[2].vid     = 2;
++		priv->port_entries[wan].pvid  = 2;
++		mt7530_apply_config(swdev);
++	}
++
+ 	/* magic vodoo */
+ 	if (bus && mt7530_r32(mt7530, REG_HWTRAP) != 0x1117edf) {
