@@ -1,33 +1,15 @@
 #!/bin/bash
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-# File name: diy-part2.sh
-# Description: OpenWrt DIY script part 2 (After Update feeds)
-#
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-
-# Modify default IP
-#sed -i 's/192.168.1.1/192.168.50.5/g' package/base-files/files/bin/config_generate
-
-# Modify default theme
-#sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
-
-# Modify hostname
-#sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
-#!/bin/bash
 echo "=== diy-part2: 应用 HC5861 WAN 隔离补丁 ==="
 
-TARGET="target/linux/ramips/files-5.10/drivers/net/ethernet/ralink/mt7530.c"
+# 自动探测 mt7530.c 路径：22.03 在 files/，老版本在 files-5.x/
+TARGET=$(ls target/linux/ramips/files*/drivers/net/ethernet/ralink/mt7530.c 2>/dev/null | head -n1)
 
-if [ ! -f "$TARGET" ]; then
-    echo "!! 找不到 $TARGET，检查内核版本/路径"
-    ls target/linux/ramips/files-5.*/drivers/net/ethernet/ralink/ 2>/dev/null
+if [ -z "$TARGET" ] || [ ! -f "$TARGET" ]; then
+    echo "!! 找不到 mt7530.c，打印 ralink 目录排查："
+    ls -R target/linux/ramips/files*/drivers/net/ethernet/ralink/ 2>/dev/null || echo "ralink 目录不存在"
     exit 1
 fi
+echo ">> 目标文件: $TARGET"
 
 python3 - "$TARGET" << 'PYEOF'
 import sys
@@ -58,8 +40,7 @@ inject = '''\t/* HC5861 WAN isolate (FS#612): port5(WAN,RTL8211E) 不被 mediate
 
 src = src.replace(anchor, anchor + inject, 1)
 open(f, 'w', encoding='utf-8').write(src)
-print("== HC5861 WAN 隔离补丁已插入 mt7530.c ==")
+print("== HC5861 WAN 隔离补丁已插入:", f, "==")
 PYEOF
 
-# 打个标记，方便日志里确认执行过
 echo "=== diy-part2 完成 ==="
